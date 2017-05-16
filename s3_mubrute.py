@@ -152,5 +152,5 @@ try:
     switch(mutations)
     print '[+] Contents directory: '+colors.BOLD+'/contents_'+epoch+'/'+colors.CLOSE
 except KeyboardInterrupt:
-    print '\n[-] Quitting early. In-complete results written to: '+colors.BOLD+'/contents_'+epoch+'/'+colors.CLOSE
+    print '\n[-] Quitting early. Incomplete results written to: '+colors.BOLD+'/contents_'+epoch+'/'+colors.CLOSE
     sys.exit()
