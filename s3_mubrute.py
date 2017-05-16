@@ -1,14 +1,15 @@
 #!/usr/bin/env python 
 import requests 
 import argparse
-import time, sys, os
+import time, sys, os, warnings
 import re
 
+warnings.filterwarnings("ignore")
 banner = '''                  __                      
                  |  |                     ___
  ________ ___ ___|  |___ _____ ___ ___ __|   |__ ______    
 |        |   |   |      |   __|   |   |         |      |
-|  |  |  |   |   |  | | |  |  |       |--|   |--| |____|
+|  |  |  |   |   |  | | |  |  |   |   |--|   |--| |____|
 |__|__|__|_______|______|__|  |_______|  |___|  |______|
 '''
 
@@ -63,23 +64,26 @@ def readin(filen,op):
                 mutators.append(line.strip())
         else:
             print colors.RED+'[-] Error...quitting!'+colors.CLOSE
-            quit()
+            sys.exit()
 
 def switch(mutations):
     for mu in mutations:
         url = 'http://'+mu+'.s3.amazonaws.com'
-        r = requests.get(url, headers=agent, allow_redirects=True, verify=False)
-        if r.status_code == 200:   #200 = bucket exists and you can call ListObjects() unauthenticated (equivalent to 'aws s3 ls s3://bucket --no-sign-request')
-            print colors.GREEN+'200'+colors.CLOSE+' - '+url
-            print colors.BLUE+'      Saving files in contents directory'+colors.CLOSE
-            parse(mu, r.text)
-        elif r.status_code == 403: #403 = bucket exists but you cannot list contents
-            print colors.YELLOW+'403'+colors.CLOSE+' - '+url
-        elif r.status_code == 404 and args['suppress'] != True: 
-            print colors.RED+'404'+colors.CLOSE+' - '+url
-        elif args['suppress'] != True:                      
-            print colors.PURPLE+r.status_code+colors.CLOSE+' - '+url
-
+        try:
+            r = requests.get(url, headers=agent, allow_redirects=True, verify=False)
+            if r.status_code == 200:   #200 = bucket exists and you can call ListObjects() unauthenticated (equivalent to 'aws s3 ls s3://bucket --no-sign-request')
+                print colors.GREEN+'200'+colors.CLOSE+' - '+url
+                print colors.BLUE+'      Saving files in contents directory'+colors.CLOSE
+                parse(mu, r.text)
+            elif r.status_code == 403: #403 = bucket exists but you cannot list contents
+                print colors.YELLOW+'403'+colors.CLOSE+' - '+url
+            elif r.status_code == 404 and args['suppress'] != True: 
+                print colors.RED+'404'+colors.CLOSE+' - '+url
+            elif args['suppress'] != True:                      
+                print colors.PURPLE+r.status_code+colors.CLOSE+' - '+url
+        except Exception: #this condition will be triggered by requesting a bucket that breaks the naming policy
+            print colors.RED+'Error requesting '+url+colors.CLOSE
+ 
 def parse(mu, resp):
 #parse through the XML response with RegEx (because its easier than using etree)
     writeto = open(cwd+'/contents_'+epoch+'/'+mu+'.txt', 'w+')
@@ -110,7 +114,7 @@ Options:
 def filehandler(f):
     if not os.path.isfile(f):
         print colors.RED+'[-] Input file does not exist...quitting!'+colors.CLOSE
-        quit()
+        sys.exit()
     else:
         readin(f, 'out')
 
@@ -124,25 +128,29 @@ args = vars(parser.parse_args())
 #print help then quit if no arguments are supplied or if -h provided
 if len(sys.argv) == 1 or args['helpbool'] == True:
 	print helpmsg()
-	quit()  
+	sys.exit()  
 
-#ascii art is required ;)
-print banner
+#main
+try:
+    #ascii art is required ;)
+    print banner
+    os.makedirs(cwd+'/contents_'+epoch)
 
-#check if mutations are empty (no user supplied list)
-#if empty, use default mutation list against the target
-if len(mutations) == 0:
-    readin('mutators.txt', 'in')
-    if args['target'] is not None:
-        mutate(args['target'])
-    else:
-        print colors.RED+'[-] Target missing...quitting!'+colors.CLOSE
+    #check if mutations are empty (no user supplied list)
+    #if empty, use default mutation list against the target
+    if len(mutations) == 0:
+        readin('mutators.txt', 'in')
+        if args['target'] is not None:
+            mutate(args['target'])
+        else:
+            print colors.RED+'[-] Target missing...quitting!'+colors.CLOSE
 
-#remove duplicates then enumerate based on status code
-mutations = set(mutations)
-print colors.BLUE+'[+] Printing results'+colors.CLOSE
+    #remove duplicates then enumerate based on status code
+    mutations = set(mutations)
+    print colors.BLUE+'[+] Printing results'+colors.CLOSE
 
-os.makedirs(cwd+'/contents_'+epoch)
-
-switch(mutations)
-print '[+] Contents directory: '+colors.BOLD+'/contents_'+epoch+'/'+colors.CLOSE
+    switch(mutations)
+    print '[+] Contents directory: '+colors.BOLD+'/contents_'+epoch+'/'+colors.CLOSE
+except KeyboardInterrupt:
+    print '\n[-] Quitting early. In-complete results written to: '+colors.BOLD+'/contents_'+epoch+'/'+colors.CLOSE
+    sys.exit()
