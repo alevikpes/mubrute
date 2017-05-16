@@ -67,8 +67,10 @@ def readin(filen,op):
             sys.exit()
 
 def switch(mutations):
+    i = 1
     for mu in mutations:
         url = 'http://'+mu+'.s3.amazonaws.com'
+        print '['+str(i)+'/'+str(len(mutations))+']',
         try:
             r = requests.get(url, headers=agent, allow_redirects=True, verify=False)
             if r.status_code == 200:   #200 = bucket exists and you can call ListObjects() unauthenticated (equivalent to 'aws s3 ls s3://bucket --no-sign-request')
@@ -83,6 +85,7 @@ def switch(mutations):
                 print colors.PURPLE+r.status_code+colors.CLOSE+' - '+url
         except Exception: #this condition will be triggered by requesting a bucket that breaks the naming policy
             print colors.RED+'Error requesting '+url+colors.CLOSE
+        i += 1
  
 def parse(mu, resp):
 #parse through the XML response with RegEx (because its easier than using etree)

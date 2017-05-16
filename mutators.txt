@@ -17,3 +17,7 @@ page
 pages
 s3
 bucket
+www
+com
+net
+org
