@@ -51,4 +51,8 @@ Use a pre-made wordlist:
 ./s3_mubrute.py -f list.txt
 ```
 ## Changelog
+5/16/2017: Added request numbering in output; added more items to the lists of mutators
+
+5/15/2017: Improved error handling for bucket requests; added exception handling for keyboard interrupts
+
 5/13/2017: initial commit
