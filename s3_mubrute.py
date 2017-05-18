@@ -1,7 +1,7 @@
 #!/usr/bin/env python 
 import requests 
 import argparse
-import time, sys, os, warnings
+import time, sys, subprocess, os, warnings
 import re
 
 warnings.filterwarnings("ignore")
@@ -17,6 +17,8 @@ banner = '''                  __
 agent = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36'}
 mutators = [] #strings to mutate input
 mutations = [] #mutated strings for enumeration
+regions = ['us-east-2', 'us-east-1', 'us-west-1', 'us-west-2', 'ca-central-1', 'ap-south-1', 'ap-northeast-2', 'ap-southeast-1', 'ap-southeast-2', 
+'ap-northeast-1', 'eu-central-1', 'eu-west-1', 'eu-west-2', 'sa-east-1'] #all S3 regions
 epoch = str(int(time.time()))
 cwd = os.getcwd()
 
@@ -66,6 +68,24 @@ def readin(filen,op):
             print colors.RED+'[-] Error...quitting!'+colors.CLOSE
             sys.exit()
 
+def nslookup(domain):
+    #get the IP of the S3 bucket
+    proc1 = subprocess.check_output(["nslookup",domain])
+    addrlist = re.findall('Address:.*?\n', proc1, re.DOTALL)
+    addr = (addrlist[-1])[9:].strip()
+
+    #nslookup the IP --> 
+    #if it contains a region from the master list, return the region // otherwise, return the an error
+    proc2 = subprocess.check_output(["nslookup", addr])
+    region = None
+    for reg in regions:
+        if reg in proc2: 
+            region = reg
+    if region is not None:
+        return colors.CLOSE+region+colors.CLOSE
+    else:
+        return colors.RED+'Cannot determine region'+colors.CLOSE
+
 def switch(mutations):
     i = 1
     for mu in mutations:
@@ -75,10 +95,12 @@ def switch(mutations):
             r = requests.get(url, headers=agent, allow_redirects=True, verify=False)
             if r.status_code == 200:   #200 = bucket exists and you can call ListObjects() unauthenticated (equivalent to 'aws s3 ls s3://bucket --no-sign-request')
                 print colors.GREEN+'200'+colors.CLOSE+' - '+url
-                print colors.BLUE+'      Saving files in contents directory'+colors.CLOSE
+                print '                Region - '+nslookup(mu+'.s3.amazonaws.com')
+                print colors.BLUE+'                Saving files in contents directory'+colors.CLOSE
                 parse(mu, r.text)
             elif r.status_code == 403: #403 = bucket exists but you cannot list contents
                 print colors.YELLOW+'403'+colors.CLOSE+' - '+url
+                print '                Region: '+nslookup(mu+'.s3.amazonaws.com')
             elif r.status_code == 404 and args['suppress'] != True: 
                 print colors.RED+'404'+colors.CLOSE+' - '+url
             elif args['suppress'] != True:                      
@@ -150,10 +172,10 @@ try:
 
     #remove duplicates then enumerate based on status code
     mutations = set(mutations)
-    print colors.BLUE+'[+] Printing results'+colors.CLOSE
+    print colors.BLUE+'[+]   Printing results'+colors.CLOSE
 
     switch(mutations)
-    print '[+] Contents directory: '+colors.BOLD+'/contents_'+epoch+'/'+colors.CLOSE
+    print '[+]   Contents directory: '+colors.BOLD+'/contents_'+epoch+'/'+colors.CLOSE
 except KeyboardInterrupt:
-    print '\n[-] Quitting early. Incomplete results written to: '+colors.BOLD+'/contents_'+epoch+'/'+colors.CLOSE
+    print '\n[-]   Quitting early. Incomplete results written to: '+colors.BOLD+'/contents_'+epoch+'/'+colors.CLOSE
     sys.exit()
