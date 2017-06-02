@@ -1,8 +1,8 @@
 #!/usr/bin/env python 
 import requests 
 import argparse
-import time, sys, subprocess, os, warnings
-import re
+import time, sys, subprocess, shlex, os, warnings
+import re, json
 
 warnings.filterwarnings("ignore")
 banner = '''                  __                      
@@ -86,21 +86,55 @@ def nslookup(domain):
     else:
         return colors.RED+'Cannot determine region'+colors.CLOSE
 
+def getacl(bucket):
+    #call the AWS CLI to get the bucket's ACL
+    #Shlex will tokenize the command string properly for subprocess
+    cmd =  'aws s3api get-bucket-acl --bucket '+bucket+' --query \'Grants[].{Permission: Permission, URI: Grantee.URI, ID: Grantee.ID, User: Grantee.DisplayName }\' --no-sign-request'
+    tokenized = shlex.split(cmd)
+
+    #handles access denied errors from the CLI
+    try:
+        proc = subprocess.check_output(tokenized, stderr=open(os.devnull, 'w'))
+    except:
+        return [colors.RED+'No anonymous access'+colors.CLOSE]
+    dic = json.loads(proc)
+
+    retdic = []
+    #Check what anonymous users can do with the bucket
+    if any(item['Permission'] == 'WRITE' and item['URI'] == 'http://acs.amazonaws.com/groups/global/AllUsers' for item in dic):
+        retdic.append(colors.GREEN+'Objects world writeable!'+colors.CLOSE)
+    if any(item['Permission'] == 'WRITE_ACP' and item['URI'] == 'http://acs.amazonaws.com/groups/global/AllUsers' for item in dic):
+        retdic.append(colors.GREEN+'ACL world writeable!'+colors.CLOSE)
+    if any(item['Permission'] == 'FULL_CONTROL' and item['URI'] == 'http://acs.amazonaws.com/groups/global/AllUsers' for item in dic):
+        retdic.append(colors.GREEN+'Full anonymous control!'+colors.CLOSE)
+    
+    return retdic
+
 def switch(mutations):
     i = 1
     for mu in mutations:
         url = 'http://'+mu+'.s3.amazonaws.com'
-        print '['+str(i)+'/'+str(len(mutations))+']',
         try:
             r = requests.get(url, headers=agent, allow_redirects=True, verify=False)
+            
+            if args['suppress'] == True:
+                if r.status_code == 200 or r.status_code == 403:
+                    print '['+str(i)+'/'+str(len(mutations))+']',
+            else:
+                print '['+str(i)+'/'+str(len(mutations))+']',
+            
             if r.status_code == 200:   #200 = bucket exists and you can call ListObjects() unauthenticated (equivalent to 'aws s3 ls s3://bucket --no-sign-request')
                 print colors.GREEN+'200'+colors.CLOSE+' - '+url
                 print '                Region - '+nslookup(mu+'.s3.amazonaws.com')
+                for aclpol in getacl(mu):
+                    print '                '+aclpol
                 print colors.BLUE+'                Saving files in contents directory'+colors.CLOSE
                 parse(mu, r.text)
             elif r.status_code == 403: #403 = bucket exists but you cannot list contents
                 print colors.YELLOW+'403'+colors.CLOSE+' - '+url
                 print '                Region: '+nslookup(mu+'.s3.amazonaws.com')
+                for aclpol in getacl(mu):
+                    print '                '+aclpol
             elif r.status_code == 404 and args['suppress'] != True: 
                 print colors.RED+'404'+colors.CLOSE+' - '+url
             elif args['suppress'] != True:                      
