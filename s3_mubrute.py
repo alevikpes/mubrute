@@ -163,7 +163,7 @@ Usage:
 
 Options:
    -t              target string
-                   usable chars: [aA-zZ], [0-9], '.' and '-' (see README)
+                   usable chars: [a-z], [0-9], '.' and '-' (see README)
    -f              input wordlist
    -s, --suppress  only print buckets that exist in the output
    -h, --help      print this help menu
